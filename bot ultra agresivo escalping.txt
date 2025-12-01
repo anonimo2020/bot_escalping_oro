@@ -1,0 +1,1265 @@
+//+------------------------------------------------------------------+
+//| GoldScalpingUltra_v7.0_AGGRESSIVE.mq5                            |
+//| Bot ULTRA AGRESIVO Optimizado para Backtesting y Live Trading   |
+//| Version: 7.0 - EXNESS OPTIMIZED - PROFIT FOCUSED                |
+//+------------------------------------------------------------------+
+#property copyright "GOLD SCALPER ULTRA v7.0 - AGGRESSIVE"
+#property version   "7.00"
+#property strict
+
+#include <Trade\Trade.mqh>
+
+// ===== CONFIGURACIÓN GENERAL =====
+input group "=== CONFIGURACIÓN BÁSICA ==="
+input bool   UseChartSymbol     = true;           // Usar símbolo del gráfico
+input string TargetSymbol       = "XAUUSD";       // Símbolo objetivo
+input ENUM_TIMEFRAMES OperTF    = PERIOD_M1;      // Timeframe operativo
+
+// ===== LOGS Y DEBUGGING =====
+input group "=== SISTEMA DE LOGS ==="
+input bool   EnableDetailedLogs = true;           // Logs detallados
+input bool   LogFilters         = true;           // Log de filtros
+input bool   LogStrategies      = true;           // Log de estrategias
+input bool   LogProfitLoss      = true;           // Log de P/L por trade
+
+// ===== ESTRATEGIAS ACTIVAS =====
+input group "=== ESTRATEGIAS (ULTRA AGRESIVAS) ==="
+input bool   UseEMA_MACD        = true;           // Estrategia EMA + MACD
+input bool   UseBB_RSI_Reversal = true;           // Estrategia BB + RSI ✅ ACTIVADA
+input bool   UseStochastic      = true;           // Estrategia Stochastic
+
+// ===== ESTRATEGIA 1: EMA + MACD =====
+input group "=== EMA + MACD Settings ==="
+input int    FastEMA            = 5;              // EMA Rápida (MUY AGRESIVO)
+input int    SlowEMA            = 13;             // EMA Lenta (MUY AGRESIVO)
+input int    MACD_Fast          = 5;              // MACD Rápida (ULTRA SENSIBLE)
+input int    MACD_Slow          = 13;             // MACD Lenta (ULTRA SENSIBLE)
+input int    MACD_Signal        = 5;              // MACD Señal (MUY RÁPIDA)
+input double MACD_HistThreshold = 0.03;           // Histograma MACD mínimo (MUY BAJO)
+
+// ===== ESTRATEGIA 2: BOLLINGER + RSI =====
+input group "=== Bollinger + RSI Settings ==="
+input int    BB_Period          = 20;             // Período Bollinger Bands
+input double BB_Deviation       = 2.0;            // Desviación estándar BB
+input int    RSI_Period         = 14;             // Período RSI
+input double RSI_Oversold       = 35.0;           // RSI Sobreventa (MUY PERMISIVO)
+input double RSI_Overbought     = 65.0;           // RSI Sobrecompra (MUY PERMISIVO)
+input bool   RequireRSIExtreme  = false;          // No requerir RSI extremo
+
+// ===== ESTRATEGIA 3: STOCHASTIC =====
+input group "=== Stochastic Settings ==="
+input int    Stoch_K            = 14;             // Stochastic %K
+input int    Stoch_D            = 3;              // Stochastic %D
+input int    Stoch_Slowing      = 3;              // Stochastic Slowing
+input double Stoch_Oversold     = 30.0;           // Stochastic Sobreventa (PERMISIVO)
+input double Stoch_Overbought   = 70.0;           // Stochastic Sobrecompra (PERMISIVO)
+input int    TrendEMA_Period    = 50;             // EMA Tendencia
+
+// ===== ATR DINÁMICO PARA SL/TP (OPTIMIZADO EXNESS) =====
+input group "=== Gestión SL/TP Dinámica ==="
+input int    ATR_Period         = 14;             // Período ATR
+input double SL_ATR_Multiplier  = 1.0;            // Multiplicador SL (AGRESIVO)
+input double TP_RiskReward      = 1.5;            // Risk:Reward Ratio (REALISTA)
+input double MinSL_USD          = 0.40;           // SL Mínimo USD (MUY AJUSTADO)
+input double MaxSL_USD          = 2.50;           // SL Máximo USD (CONTROLADO)
+input int    ATR_Smoothing      = 10;             // Suavizado ATR
+
+// ===== GESTIÓN DE RIESGO =====
+input group "=== Gestión de Riesgo ==="
+input double RiskPercent        = 1.2;            // Riesgo por trade (AGRESIVO)
+input double MaxLotSize         = 0.30;           // Lote máximo
+input double MaxSpreadPoints    = 35.0;           // Spread máximo puntos
+input int    MagicNumber        = 20251130;       // Magic Number
+input int    Slippage           = 20;             // Slippage Exness
+
+// ===== GESTIÓN DE POSICIONES =====
+input group "=== Gestión de Posiciones ==="
+input bool   UseTrailingStop    = true;           // Trailing Stop
+input double TrailStart_USD     = 0.30;           // Iniciar trailing (MÁS RÁPIDO)
+input double TrailDistance_ATR  = 0.5;            // Distancia trailing (MÁS AJUSTADO)
+input bool   UseBreakeven       = true;           // Breakeven
+input double BreakevenAt_USD    = 0.25;           // Activar BE (MÁS RÁPIDO)
+input double BreakevenPlus_USD  = 0.10;           // Mover BE a +X USD
+input bool   UsePartialClose    = true;           // Cierre parcial
+input double PartialAt_USD      = 0.60;           // Cierre parcial (MÁS RÁPIDO)
+input double PartialPercent     = 50.0;           // % cerrar
+
+// ===== FILTROS AVANZADOS =====
+input group "=== Filtros de Mercado ==="
+input bool   UseSessionFilter   = true;           // Filtro sesión
+input int    SessionStart       = 7;              // Hora inicio GMT
+input int    SessionEnd         = 16;             // Hora fin GMT
+input bool   UseVolumeFilter    = true;           // Filtro volumen
+input int    VolumeBars         = 8;              // Barras volumen (SENSIBLE)
+input double VolumeMultiplier   = 0.9;            // Volumen mínimo (MUY PERMISIVO)
+input bool   UseTrendFilter     = true;           // Filtro H1
+input int    H1_TrendEMA        = 200;            // EMA H1
+input bool   UseADXFilter       = true;           // Filtro ADX
+input int    ADX_Period         = 14;             // Período ADX
+input double ADX_Min            = 10.0;           // ADX Mín (MUY BAJO)
+input double ADX_Max            = 60.0;           // ADX Máx (MUY PERMISIVO)
+
+// ===== PRICE ACTION (ULTRA PERMISIVO) =====
+input group "=== Filtros Price Action ==="
+input bool   UsePriceAction     = false;          // ❌ DESACTIVADO por defecto
+input double MinCandleBody_ATR  = 0.10;           // Cuerpo vela (MUY PERMISIVO)
+input double MaxCandleWick_Body = 5.0;            // Mecha máx (MUY PERMISIVO)
+
+// ===== LÍMITES Y CONTROL =====
+input group "=== Límites de Trading ==="
+input int    MaxDailyTrades     = 25;             // Trades máx/día (AGRESIVO)
+input double MaxDailyLoss_USD   = 80.0;           // Pérdida máx diaria
+input int    MaxOpenPositions   = 1;              // Posiciones abiertas
+input double MinWinRate         = 45.0;           // Win rate mínimo (REALISTA)
+input int    CooldownSeconds    = 10;             // Cooldown (MUY CORTO)
+input int    MaxConsecLosses    = 5;              // Pérdidas consecutivas
+input int    PauseAfterLoss_Min = 15;             // Pausa tras rachas
+
+// ===== TELEGRAM =====
+input group "=== Notificaciones Telegram ==="
+input bool   SendTelegram       = true;           // Enviar notificaciones
+input string TELEGRAM_BOT_TOKEN = "8147187392:AAFMyIC0EL0-9u63MzEfDqvqytujQFoVSLE";
+input string TELEGRAM_CHAT_ID   = "7009100334";
+
+// -----------------------------------------------------------------
+CTrade trade;
+
+// Handles de indicadores
+int fastEmaHandle, slowEmaHandle, trendEmaHandle, h1TrendHandle;
+int macdHandle, rsiHandle, atrHandle, adxHandle;
+int bbHandle, stochHandle;
+
+// Variables
+datetime lastBarTime = 0;
+string WorkingSymbol;
+ulong lastNotifiedDeal = 0;
+datetime lastCloseCheck = 0;
+
+// Estadísticas
+int dailyTrades = 0;
+int dailyWins = 0;
+int dailyLosses = 0;
+double dailyProfit = 0.0;
+datetime lastResetDate = 0;
+
+// Control
+datetime lastTradeTime = 0;
+int consecutiveLosses = 0;
+datetime pausedUntil = 0;
+double avgSpread = 0;
+int spreadSamples = 0;
+
+// Registro de operaciones abiertas
+struct TradeInfo {
+   ulong ticket;
+   double openPrice;
+   double lot;
+   datetime openTime;
+   string strategy;
+   int type;
+};
+TradeInfo openTrades[];
+
+//+------------------------------------------------------------------+
+//| LOG SYSTEM                                                        |
+//+------------------------------------------------------------------+
+void LogInfo(string message)
+{
+   if(!EnableDetailedLogs) return;
+   Print("[INFO] ", message);
+}
+
+void LogFilter(string filterName, bool passed, string reason = "")
+{
+   if(!LogFilters) return;
+   string status = passed ? "✅" : "❌";
+   string msg = StringFormat("[FILTER] %s %s", status, filterName);
+   if(reason != "") msg += ": " + reason;
+   Print(msg);
+}
+
+void LogStrategy(string name, int signal, string details = "")
+{
+   if(!LogStrategies) return;
+   string sig = (signal > 0) ? "🟢BUY" : (signal < 0) ? "🔴SELL" : "⚪NONE";
+   Print(StringFormat("[STRATEGY] %s: %s %s", name, sig, details));
+}
+
+void LogPL(string action, ulong ticket, double profit, double balance)
+{
+   if(!LogProfitLoss) return;
+   string emoji = (profit > 0) ? "💰" : (profit < 0) ? "💸" : "⚪";
+   Print(StringFormat("[P/L] %s %s #%d | P/L: $%.2f | Balance: $%.2f", 
+                     emoji, action, ticket, profit, balance));
+}
+
+//+------------------------------------------------------------------+
+//| Telegram                                                          |
+//+------------------------------------------------------------------+
+void SendTelegramMsg(string txt)
+{
+   if(!SendTelegram) return;
+   if(StringLen(TELEGRAM_BOT_TOKEN) == 0) return;
+   
+   string url = "https://api.telegram.org/bot" + TELEGRAM_BOT_TOKEN + "/sendMessage";
+   string data = StringFormat("{\"chat_id\":\"%s\",\"text\":\"%s\",\"parse_mode\":\"HTML\"}", 
+                              TELEGRAM_CHAT_ID, txt);
+   
+   char post[], result[];
+   string headers = "Content-Type: application/json\r\n";
+   int dataLen = StringToCharArray(data, post, 0, WHOLE_ARRAY, CP_UTF8);
+   if(dataLen > 0) ArrayResize(post, dataLen - 1);
+   
+   WebRequest("POST", url, headers, 10000, post, result, headers);
+}
+
+//+------------------------------------------------------------------+
+//| Startup Report                                                    |
+//+------------------------------------------------------------------+
+void SendStartupReport()
+{
+   string msg = "🚀 GOLD SCALPER v7.0 🚀\n";
+   msg += "⚡ ULTRA AGGRESSIVE MODE ⚡\n\n";
+   msg += "💰 Balance: $" + DoubleToString(AccountInfoDouble(ACCOUNT_BALANCE), 2) + "\n";
+   msg += "💎 " + WorkingSymbol + " M1\n";
+   msg += "⚖️ Risk: " + DoubleToString(RiskPercent, 1) + "%\n";
+   msg += "🎯 R:R: 1:" + DoubleToString(TP_RiskReward, 1) + "\n\n";
+   
+   msg += "📊 ESTRATEGIAS:\n";
+   if(UseEMA_MACD) msg += "✅ EMA(" + IntegerToString(FastEMA) + "/" + IntegerToString(SlowEMA) + ") + MACD\n";
+   if(UseBB_RSI_Reversal) msg += "✅ BB + RSI\n";
+   if(UseStochastic) msg += "✅ Stochastic\n\n";
+   
+   msg += "🔥 MODO AGRESIVO ACTIVADO\n";
+   msg += "📈 Max: " + IntegerToString(MaxDailyTrades) + " trades/día\n";
+   msg += "⏱️ Cooldown: " + IntegerToString(CooldownSeconds) + "s\n\n";
+   msg += "🟢 Bot iniciado";
+   
+   SendTelegramMsg(msg);
+   LogInfo("═══ BOT STARTED v7.0 AGGRESSIVE ═══");
+}
+
+//+------------------------------------------------------------------+
+//| Calcular lotes                                                    |
+//+------------------------------------------------------------------+
+double CalcLotByRisk(double riskPct, double slDistance_USD)
+{
+   if(slDistance_USD <= 0) slDistance_USD = 0.5;
+   
+   double balance = AccountInfoDouble(ACCOUNT_BALANCE);
+   double riskMoney = balance * (riskPct / 100.0);
+   double lot = riskMoney / slDistance_USD;
+   
+   double minlot = SymbolInfoDouble(WorkingSymbol, SYMBOL_VOLUME_MIN);
+   double maxlot = SymbolInfoDouble(WorkingSymbol, SYMBOL_VOLUME_MAX);
+   
+   if(lot < minlot) lot = minlot;
+   if(lot > MaxLotSize) lot = MaxLotSize;
+   if(lot > maxlot) lot = maxlot;
+   
+   return NormalizeDouble(lot, 2);
+}
+
+//+------------------------------------------------------------------+
+//| Spread                                                            |
+//+------------------------------------------------------------------+
+double GetRealSpreadPoints()
+{
+   double ask = SymbolInfoDouble(WorkingSymbol, SYMBOL_ASK);
+   double bid = SymbolInfoDouble(WorkingSymbol, SYMBOL_BID);
+   double point = SymbolInfoDouble(WorkingSymbol, SYMBOL_POINT);
+   return (point > 0) ? (ask - bid) / point : 999;
+}
+
+//+------------------------------------------------------------------+
+//| Filtros                                                           |
+//+------------------------------------------------------------------+
+bool IsWithinSession()
+{
+   if(!UseSessionFilter) return true;
+   MqlDateTime dt;
+   TimeToStruct(TimeGMT(), dt);
+   return (dt.hour >= SessionStart && dt.hour < SessionEnd);
+}
+
+int CountPositions()
+{
+   int cnt = 0;
+   for(int i = PositionsTotal() - 1; i >= 0; i--)
+   {
+      if(PositionSelectByTicket(PositionGetTicket(i)))
+      {
+         if(PositionGetString(POSITION_SYMBOL) == WorkingSymbol &&
+            PositionGetInteger(POSITION_MAGIC) == MagicNumber)
+            cnt++;
+      }
+   }
+   return cnt;
+}
+
+bool CheckVolumeFilter()
+{
+   if(!UseVolumeFilter) return true;
+   
+   long volumes[];
+   ArraySetAsSeries(volumes, true);
+   if(CopyTickVolume(WorkingSymbol, OperTF, 0, VolumeBars + 2, volumes) <= 0) return false;
+   
+   double avg = 0;
+   for(int i = 1; i <= VolumeBars; i++) avg += volumes[i];
+   avg /= VolumeBars;
+   
+   bool passed = (volumes[0] >= avg * VolumeMultiplier);
+   LogFilter("Volume", passed, StringFormat("%.0f >= %.0f", (double)volumes[0], avg * VolumeMultiplier));
+   return passed;
+}
+
+bool CheckADXFilter(double &adxValue)
+{
+   if(!UseADXFilter) 
+   {
+      adxValue = 0;
+      return true;
+   }
+   
+   double adx[];
+   ArraySetAsSeries(adx, true);
+   if(CopyBuffer(adxHandle, 0, 0, 2, adx) <= 0) return false;
+   
+   adxValue = adx[0];
+   bool passed = (adxValue >= ADX_Min && adxValue <= ADX_Max);
+   LogFilter("ADX", passed, StringFormat("%.1f [%.1f-%.1f]", adxValue, ADX_Min, ADX_Max));
+   return passed;
+}
+
+int GetH1Trend()
+{
+   if(!UseTrendFilter) return 0;
+   
+   double h1Ema[], close[];
+   ArraySetAsSeries(h1Ema, true);
+   ArraySetAsSeries(close, true);
+   
+   if(CopyBuffer(h1TrendHandle, 0, 0, 2, h1Ema) <= 0) return 0;
+   if(CopyClose(WorkingSymbol, PERIOD_H1, 0, 2, close) <= 0) return 0;
+   
+   if(close[0] > h1Ema[0] && close[1] > h1Ema[1]) return 1;
+   if(close[0] < h1Ema[0] && close[1] < h1Ema[1]) return -1;
+   return 0;
+}
+
+bool CheckPriceAction(int direction)
+{
+   if(!UsePriceAction) return true;
+   
+   double atr[];
+   ArraySetAsSeries(atr, true);
+   if(CopyBuffer(atrHandle, 0, 0, 2, atr) <= 0) return true;
+   
+   double o = iOpen(WorkingSymbol, OperTF, 0);
+   double h = iHigh(WorkingSymbol, OperTF, 0);
+   double l = iLow(WorkingSymbol, OperTF, 0);
+   double c = iClose(WorkingSymbol, OperTF, 0);
+   
+   double body = MathAbs(c - o);
+   double upperWick = h - MathMax(o, c);
+   double lowerWick = MathMin(o, c) - l;
+   
+   if(body < atr[0] * MinCandleBody_ATR) return false;
+   
+   if(direction > 0 && (c <= o || upperWick > body * MaxCandleWick_Body)) return false;
+   if(direction < 0 && (c >= o || lowerWick > body * MaxCandleWick_Body)) return false;
+   
+   return true;
+}
+
+bool CheckSpreadFilter()
+{
+   double currentSpread = GetRealSpreadPoints();
+   spreadSamples++;
+   avgSpread = ((avgSpread * (spreadSamples - 1)) + currentSpread) / spreadSamples;
+   
+   bool passed = (currentSpread <= MaxSpreadPoints);
+   if(!passed) LogFilter("Spread", false, StringFormat("%.1f > %.1f", currentSpread, MaxSpreadPoints));
+   return passed;
+}
+
+//+------------------------------------------------------------------+
+//| ESTRATEGIA 1: EMA + MACD (ULTRA AGRESIVO)                         |
+//+------------------------------------------------------------------+
+int CheckStrategy_EMA_MACD()
+{
+   if(!UseEMA_MACD) return 0;
+   
+   double fast[], slow[], macdMain[], macdSignal[], close[];
+   ArraySetAsSeries(fast, true);
+   ArraySetAsSeries(slow, true);
+   ArraySetAsSeries(macdMain, true);
+   ArraySetAsSeries(macdSignal, true);
+   ArraySetAsSeries(close, true);
+   
+   if(CopyBuffer(fastEmaHandle, 0, 0, 3, fast) <= 0) return 0;
+   if(CopyBuffer(slowEmaHandle, 0, 0, 3, slow) <= 0) return 0;
+   if(CopyBuffer(macdHandle, 0, 0, 3, macdMain) <= 0) return 0;
+   if(CopyBuffer(macdHandle, 1, 0, 3, macdSignal) <= 0) return 0;
+   if(CopyClose(WorkingSymbol, OperTF, 0, 3, close) <= 0) return 0;
+   
+   int h1Trend = GetH1Trend();
+   double hist = macdMain[0] - macdSignal[0];
+   double hist1 = macdMain[1] - macdSignal[1];
+   
+   // BUY
+   if(h1Trend >= 0)
+   {
+      bool emaCross = (fast[1] <= slow[1] && fast[0] > slow[0]);
+      bool emaAligned = (fast[0] > slow[0] && close[0] > fast[0]);
+      bool macdBullish = (hist > MACD_HistThreshold || hist > hist1);
+      
+      if((emaCross || emaAligned) && macdBullish)
+      {
+         LogStrategy("EMA_MACD", 1, StringFormat("H1:%d MACD:%.4f", h1Trend, hist));
+         if(CheckPriceAction(1)) return 1;
+      }
+   }
+   
+   // SELL
+   if(h1Trend <= 0)
+   {
+      bool emaCross = (fast[1] >= slow[1] && fast[0] < slow[0]);
+      bool emaAligned = (fast[0] < slow[0] && close[0] < fast[0]);
+      bool macdBearish = (hist < -MACD_HistThreshold || hist < hist1);
+      
+      if((emaCross || emaAligned) && macdBearish)
+      {
+         LogStrategy("EMA_MACD", -1, StringFormat("H1:%d MACD:%.4f", h1Trend, hist));
+         if(CheckPriceAction(-1)) return -1;
+      }
+   }
+   
+   return 0;
+}
+
+//+------------------------------------------------------------------+
+//| ESTRATEGIA 2: BB + RSI (ACTIVADA Y OPTIMIZADA)                    |
+//+------------------------------------------------------------------+
+int CheckStrategy_BB_RSI()
+{
+   if(!UseBB_RSI_Reversal) return 0;
+   
+   double bbUpper[], bbLower[], rsi[], close[];
+   ArraySetAsSeries(bbUpper, true);
+   ArraySetAsSeries(bbLower, true);
+   ArraySetAsSeries(rsi, true);
+   ArraySetAsSeries(close, true);
+   
+   if(CopyBuffer(bbHandle, 1, 0, 3, bbUpper) <= 0) return 0;
+   if(CopyBuffer(bbHandle, 2, 0, 3, bbLower) <= 0) return 0;
+   if(CopyBuffer(rsiHandle, 0, 0, 3, rsi) <= 0) return 0;
+   if(CopyClose(WorkingSymbol, OperTF, 0, 3, close) <= 0) return 0;
+   
+   // BUY - Toca banda inferior
+   bool nearLower = (close[1] <= bbLower[1] * 1.002); // Tolerancia 0.2%
+   bool bouncing = (close[0] > close[1]);
+   bool rsiLow = RequireRSIExtreme ? (rsi[0] < RSI_Oversold) : (rsi[0] < 50);
+   
+   if(nearLower && bouncing && rsiLow)
+   {
+      LogStrategy("BB_RSI", 1, StringFormat("RSI:%.1f Near:%.2f", rsi[0], close[1]));
+      if(CheckPriceAction(1)) return 1;
+   }
+   
+   // SELL - Toca banda superior
+   bool nearUpper = (close[1] >= bbUpper[1] * 0.998); // Tolerancia 0.2%
+   bool rejecting = (close[0] < close[1]);
+   bool rsiHigh = RequireRSIExtreme ? (rsi[0] > RSI_Overbought) : (rsi[0] > 50);
+   
+   if(nearUpper && rejecting && rsiHigh)
+   {
+      LogStrategy("BB_RSI", -1, StringFormat("RSI:%.1f Near:%.2f", rsi[0], close[1]));
+      if(CheckPriceAction(-1)) return -1;
+   }
+   
+   return 0;
+}
+
+//+------------------------------------------------------------------+
+//| ESTRATEGIA 3: STOCHASTIC                                          |
+//+------------------------------------------------------------------+
+int CheckStrategy_Stochastic()
+{
+   if(!UseStochastic) return 0;
+   
+   double stochK[], stochD[], trendEma[], close[];
+   ArraySetAsSeries(stochK, true);
+   ArraySetAsSeries(stochD, true);
+   ArraySetAsSeries(trendEma, true);
+   ArraySetAsSeries(close, true);
+   
+   if(CopyBuffer(stochHandle, 0, 0, 3, stochK) <= 0) return 0;
+   if(CopyBuffer(stochHandle, 1, 0, 3, stochD) <= 0) return 0;
+   if(CopyBuffer(trendEmaHandle, 0, 0, 2, trendEma) <= 0) return 0;
+   if(CopyClose(WorkingSymbol, OperTF, 0, 2, close) <= 0) return 0;
+   
+   int h1Trend = GetH1Trend();
+   
+   // BUY
+   if(h1Trend >= 0)
+   {
+      bool oversold = (stochK[1] < Stoch_Oversold);
+      bool rising = (stochK[0] > stochK[1]);
+      bool aboveTrend = (close[0] > trendEma[0]);
+      
+      if(oversold && rising && aboveTrend)
+      {
+         LogStrategy("STOCH", 1, StringFormat("K:%.1f H1:%d", stochK[0], h1Trend));
+         if(CheckPriceAction(1)) return 1;
+      }
+   }
+   
+   // SELL
+   if(h1Trend <= 0)
+   {
+      bool overbought = (stochK[1] > Stoch_Overbought);
+      bool falling = (stochK[0] < stochK[1]);
+      bool belowTrend = (close[0] < trendEma[0]);
+      
+      if(overbought && falling && belowTrend)
+      {
+         LogStrategy("STOCH", -1, StringFormat("K:%.1f H1:%d", stochK[0], h1Trend));
+         if(CheckPriceAction(-1)) return -1;
+      }
+   }
+   
+   return 0;
+}
+
+//+------------------------------------------------------------------+
+//| Reset diario                                                      |
+//+------------------------------------------------------------------+
+void CheckDailyReset()
+{
+   MqlDateTime cur, last;
+   TimeToStruct(TimeCurrent(), cur);
+   TimeToStruct(lastResetDate, last);
+   
+   if(cur.day != last.day)
+   {
+      if(dailyTrades > 0)
+      {
+         double winRate = ((double)dailyWins / dailyTrades) * 100.0;
+         
+         string msg = "📊 RESUMEN DIARIO\n\n";
+         msg += "Trades: " + IntegerToString(dailyTrades) + "\n";
+         msg += "✅ Wins: " + IntegerToString(dailyWins) + "\n";
+         msg += "❌ Loss: " + IntegerToString(dailyLosses) + "\n";
+         msg += "🎯 WR: " + DoubleToString(winRate, 1) + "%\n";
+         msg += "💰 P/L: $" + DoubleToString(dailyProfit, 2) + "\n";
+         msg += "💼 Balance: $" + DoubleToString(AccountInfoDouble(ACCOUNT_BALANCE), 2);
+         
+         SendTelegramMsg(msg);
+         LogInfo(StringFormat("Daily: Trades=%d WR=%.1f%% P/L=$%.2f", dailyTrades, winRate, dailyProfit));
+      }
+      
+      dailyTrades = 0;
+      dailyWins = 0;
+      dailyLosses = 0;
+      dailyProfit = 0.0;
+      consecutiveLosses = 0;
+      lastResetDate = TimeCurrent();
+   }
+}
+
+//+------------------------------------------------------------------+
+//| Control rachas                                                    |
+//+------------------------------------------------------------------+
+bool CheckLossStreak()
+{
+   if(consecutiveLosses >= MaxConsecLosses)
+   {
+      if(pausedUntil == 0)
+      {
+         pausedUntil = TimeCurrent() + (PauseAfterLoss_Min * 60);
+         SendTelegramMsg("⚠️ PAUSA\nRacha: " + IntegerToString(consecutiveLosses));
+         LogInfo(StringFormat("⚠️ PAUSED - Losses: %d", consecutiveLosses));
+      }
+      
+      if(TimeCurrent() < pausedUntil) return false;
+      
+      consecutiveLosses = 0;
+      pausedUntil = 0;
+      SendTelegramMsg("✅ Reanudado");
+      LogInfo("✅ RESUMED");
+   }
+   
+   return true;
+}
+
+//+------------------------------------------------------------------+
+//| Verificar límites                                                 |
+//+------------------------------------------------------------------+
+bool CheckLimits()
+{
+   if(!CheckLossStreak()) return false;
+   if(dailyTrades >= MaxDailyTrades) return false;
+   if(dailyProfit <= -MaxDailyLoss_USD) return false;
+   
+   if(dailyTrades >= 5)
+   {
+      double winRate = ((double)dailyWins / dailyTrades) * 100.0;
+      if(winRate < MinWinRate) return false;
+   }
+   
+   if(CountPositions() >= MaxOpenPositions) return false;
+   
+   return true;
+}
+
+//+------------------------------------------------------------------+
+//| Registrar trade abierto                                           |
+//+------------------------------------------------------------------+
+void RegisterOpenTrade(ulong ticket, double price, double lot, string strategy, int type)
+{
+   int size = ArraySize(openTrades);
+   ArrayResize(openTrades, size + 1);
+   
+   openTrades[size].ticket = ticket;
+   openTrades[size].openPrice = price;
+   openTrades[size].lot = lot;
+   openTrades[size].openTime = TimeCurrent();
+   openTrades[size].strategy = strategy;
+   openTrades[size].type = type;
+   
+   LogInfo(StringFormat("Trade #%d registered: %s %.2f lots @ %.2f", 
+                       ticket, strategy, lot, price));
+}
+
+//+------------------------------------------------------------------+
+//| Obtener info de trade registrado                                  |
+//+------------------------------------------------------------------+
+bool GetOpenTradeInfo(ulong ticket, TradeInfo &info)
+{
+   for(int i = 0; i < ArraySize(openTrades); i++)
+   {
+      if(openTrades[i].ticket == ticket)
+      {
+         info = openTrades[i];
+         return true;
+      }
+   }
+   return false;
+}
+
+//+------------------------------------------------------------------+
+//| Remover trade del registro                                        |
+//+------------------------------------------------------------------+
+void RemoveOpenTrade(ulong ticket)
+{
+   int size = ArraySize(openTrades);
+   for(int i = 0; i < size; i++)
+   {
+      if(openTrades[i].ticket == ticket)
+      {
+         // Shift array
+         for(int j = i; j < size - 1; j++)
+            openTrades[j] = openTrades[j + 1];
+         
+         ArrayResize(openTrades, size - 1);
+         LogInfo(StringFormat("Trade #%d removed from registry", ticket));
+         return;
+      }
+   }
+}
+
+//+------------------------------------------------------------------+
+//| Monitorear trades cerrados CON PROFIT/LOSS                        |
+//+------------------------------------------------------------------+
+void CheckClosedTrades()
+{
+   if(TimeCurrent() - lastCloseCheck < 2) return;
+   lastCloseCheck = TimeCurrent();
+   
+   HistorySelect(TimeCurrent() - 86400, TimeCurrent());
+   int total = HistoryDealsTotal();
+   
+   for(int i = total - 1; i >= 0; i--)
+   {
+      ulong ticket = HistoryDealGetTicket(i);
+      if(ticket <= 0 || ticket == lastNotifiedDeal) break;
+      
+      if(HistoryDealGetString(ticket, DEAL_SYMBOL) != WorkingSymbol) continue;
+      if(HistoryDealGetInteger(ticket, DEAL_MAGIC) != MagicNumber) continue;
+      
+      ENUM_DEAL_ENTRY entry = (ENUM_DEAL_ENTRY)HistoryDealGetInteger(ticket, DEAL_ENTRY);
+      if(entry != DEAL_ENTRY_OUT) continue;
+      
+      // Calcular profit total
+      double profit = HistoryDealGetDouble(ticket, DEAL_PROFIT);
+      double swap = HistoryDealGetDouble(ticket, DEAL_SWAP);
+      double commission = HistoryDealGetDouble(ticket, DEAL_COMMISSION);
+      double totalProfit = profit + swap + commission;
+      
+      // Obtener precio de cierre
+      double closePrice = HistoryDealGetDouble(ticket, DEAL_PRICE);
+      double volume = HistoryDealGetDouble(ticket, DEAL_VOLUME);
+      
+      // Buscar info del trade abierto
+      TradeInfo info;
+      bool hasInfo = GetOpenTradeInfo(ticket, info);
+      
+      // Calcular pips/puntos
+      double points = 0;
+      if(hasInfo)
+      {
+         double pointValue = SymbolInfoDouble(WorkingSymbol, SYMBOL_POINT);
+         if(info.type == POSITION_TYPE_BUY)
+            points = (closePrice - info.openPrice) / pointValue;
+         else
+            points = (info.openPrice - closePrice) / pointValue;
+      }
+      
+      // Actualizar estadísticas
+      dailyProfit += totalProfit;
+      
+      if(totalProfit > 0)
+      {
+         dailyWins++;
+         consecutiveLosses = 0;
+      }
+      else if(totalProfit < 0)
+      {
+         dailyLosses++;
+         consecutiveLosses++;
+      }
+      
+      double balance = AccountInfoDouble(ACCOUNT_BALANCE);
+      
+      // LOG DETALLADO
+      LogPL(totalProfit > 0 ? "WIN" : "LOSS", ticket, totalProfit, balance);
+      
+      // TELEGRAM DETALLADO
+      string emoji = (totalProfit > 0) ? "✅💰" : "❌💸";
+      string result = (totalProfit > 0) ? "GANANCIA" : "PÉRDIDA";
+      
+      string msg = emoji + " " + result + "\n\n";
+      msg += "🎫 #" + IntegerToString(ticket) + "\n";
+      
+      if(hasInfo)
+      {
+         msg += "📊 " + info.strategy + "\n";
+         msg += "📦 " + DoubleToString(volume, 2) + " lots\n";
+         msg += "📈 Open: " + DoubleToString(info.openPrice, _Digits) + "\n";
+         msg += "📉 Close: " + DoubleToString(closePrice, _Digits) + "\n";
+         if(points != 0) msg += "📏 Points: " + DoubleToString(points, 1) + "\n";
+         
+         int duration = (int)((TimeCurrent() - info.openTime) / 60);
+         msg += "⏱️ Duration: " + IntegerToString(duration) + "min\n";
+      }
+      
+      msg += "\n💵 Profit: $" + DoubleToString(profit, 2) + "\n";
+      if(swap != 0) msg += "🔄 Swap: $" + DoubleToString(swap, 2) + "\n";
+      if(commission != 0) msg += "💼 Comm: $" + DoubleToString(commission, 2) + "\n";
+      msg += "💰 TOTAL: $" + DoubleToString(totalProfit, 2) + "\n\n";
+      
+      msg += "📊 HOY:\n";
+      msg += "Trades: " + IntegerToString(dailyTrades) + " | ";
+      msg += "P/L: $" + DoubleToString(dailyProfit, 2) + "\n";
+      
+      if(dailyTrades > 0)
+      {
+         double wr = ((double)dailyWins / dailyTrades) * 100.0;
+         msg += "✅ " + IntegerToString(dailyWins) + " | ";
+         msg += "❌ " + IntegerToString(dailyLosses) + " | ";
+         msg += "WR: " + DoubleToString(wr, 1) + "%\n";
+      }
+      
+      msg += "💼 Balance: $" + DoubleToString(balance, 2);
+      
+      SendTelegramMsg(msg);
+      
+      // Remover del registro
+      if(hasInfo) RemoveOpenTrade(ticket);
+      
+      lastNotifiedDeal = ticket;
+      break;
+   }
+}
+
+//+------------------------------------------------------------------+
+//| Validar niveles Stop (SIMPLIFICADO)                               |
+//+------------------------------------------------------------------+
+bool ValidateStopLevels(int posType, double price, double sl, double tp, ulong ticket)
+{
+   int stopLevel = (int)SymbolInfoInteger(WorkingSymbol, SYMBOL_TRADE_STOPS_LEVEL);
+   double point = SymbolInfoDouble(WorkingSymbol, SYMBOL_POINT);
+   
+   if(stopLevel == 0) return true; // No hay restricción
+   
+   double minDistance = stopLevel * point;
+   
+   if(sl > 0)
+   {
+      double slDistance = (posType == POSITION_TYPE_BUY) ? (price - sl) : (sl - price);
+      if(slDistance < minDistance)
+      {
+         LogInfo(StringFormat("[VALIDATE] ❌ #%d SL too close: %.5f < %.5f", ticket, slDistance, minDistance));
+         return false;
+      }
+   }
+   
+   return true;
+}
+
+//+------------------------------------------------------------------+
+//| Gestión de posiciones CON PROFIT CORRECTO                         |
+//+------------------------------------------------------------------+
+void ManagePositions()
+{
+   double atr[];
+   ArraySetAsSeries(atr, true);
+   if(CopyBuffer(atrHandle, 0, 0, 2, atr) <= 0)
+   {
+      LogInfo("[MANAGE] ❌ Failed to get ATR");
+      return;
+   }
+   
+   int totalPositions = PositionsTotal();
+   if(totalPositions == 0) return;
+   
+   for(int i = totalPositions - 1; i >= 0; i--)
+   {
+      ulong ticket = PositionGetTicket(i);
+      if(ticket <= 0) continue;
+      
+      if(!PositionSelectByTicket(ticket)) continue;
+      if(PositionGetString(POSITION_SYMBOL) != WorkingSymbol) continue;
+      if(PositionGetInteger(POSITION_MAGIC) != MagicNumber) continue;
+      
+      int ptype = (int)PositionGetInteger(POSITION_TYPE);
+      double openPrice = PositionGetDouble(POSITION_PRICE_OPEN);
+      double currentSL = PositionGetDouble(POSITION_SL);
+      double currentTP = PositionGetDouble(POSITION_TP);
+      double volume = PositionGetDouble(POSITION_VOLUME);
+      
+      double currentPrice = (ptype == POSITION_TYPE_BUY) ?
+         SymbolInfoDouble(WorkingSymbol, SYMBOL_BID) :
+         SymbolInfoDouble(WorkingSymbol, SYMBOL_ASK);
+      
+      // ✅ PROFIT USD REAL DE LA PLATAFORMA (NO CALCULAR MANUALMENTE)
+      double profitUSD = PositionGetDouble(POSITION_PROFIT);
+      
+      LogInfo(StringFormat("[MANAGE] #%d %s | Open:%.2f Cur:%.2f SL:%.2f | Profit:$%.2f", 
+                          ticket, 
+                          ptype == POSITION_TYPE_BUY ? "BUY" : "SELL",
+                          openPrice, currentPrice, currentSL, profitUSD));
+      
+      // ═══════════════════════════════════════════
+      // BREAKEVEN (MÁS RÁPIDO Y AGRESIVO)
+      // ═══════════════════════════════════════════
+      if(UseBreakeven && profitUSD >= BreakevenAt_USD)
+      {
+         double point = SymbolInfoDouble(WorkingSymbol, SYMBOL_POINT);
+         double newSL;
+         bool shouldModify = false;
+         
+         if(ptype == POSITION_TYPE_BUY)
+         {
+            // BE ligeramente por encima del precio de entrada
+            newSL = NormalizeDouble(openPrice + (BreakevenPlus_USD / 10.0) * point, _Digits);
+            
+            if(currentSL < newSL)
+            {
+               shouldModify = true;
+               LogInfo(StringFormat("[BE] #%d BUY BE | Profit:$%.2f | NewSL:%.5f > CurSL:%.5f", 
+                                   ticket, profitUSD, newSL, currentSL));
+            }
+         }
+         else
+         {
+            newSL = NormalizeDouble(openPrice - (BreakevenPlus_USD / 10.0) * point, _Digits);
+            
+            if(currentSL == 0 || currentSL > newSL)
+            {
+               shouldModify = true;
+               LogInfo(StringFormat("[BE] #%d SELL BE | Profit:$%.2f | NewSL:%.5f < CurSL:%.5f", 
+                                   ticket, profitUSD, newSL, currentSL));
+            }
+         }
+         
+         if(shouldModify && ValidateStopLevels(ptype, currentPrice, newSL, currentTP, ticket))
+         {
+            if(trade.PositionModify(ticket, newSL, currentTP))
+            {
+               LogInfo(StringFormat("🔒 BREAKEVEN #%d | Profit:$%.2f | SL:%.5f", ticket, profitUSD, newSL));
+               SendTelegramMsg("🔒 BE\n#" + IntegerToString(ticket) + "\nProfit: $" + DoubleToString(profitUSD, 2) + "\nSL: " + DoubleToString(newSL, _Digits));
+            }
+            else
+            {
+               LogInfo(StringFormat("[BE] ❌ Failed: %d - %s", GetLastError(), trade.ResultRetcodeDescription()));
+            }
+         }
+      }
+      
+      // ═══════════════════════════════════════════
+      // PARTIAL CLOSE
+      // ═══════════════════════════════════════════
+      if(UsePartialClose && profitUSD >= PartialAt_USD)
+      {
+         double minlot = SymbolInfoDouble(WorkingSymbol, SYMBOL_VOLUME_MIN);
+         double closeVol = NormalizeDouble(volume * (PartialPercent / 100.0), 2);
+         
+         if(closeVol >= minlot && (volume - closeVol) >= minlot)
+         {
+            if(trade.PositionClosePartial(ticket, closeVol))
+            {
+               LogInfo(StringFormat("💰 PARTIAL #%d | Profit:$%.2f | Closed:%.2f lots", ticket, profitUSD, closeVol));
+               SendTelegramMsg("💰 PARCIAL\n#" + IntegerToString(ticket) + "\nProfit: $" + DoubleToString(profitUSD, 2));
+            }
+         }
+      }
+      
+      // ═══════════════════════════════════════════
+      // TRAILING STOP (RÁPIDO Y PROTECTOR)
+      // ═══════════════════════════════════════════
+      if(UseTrailingStop && profitUSD >= TrailStart_USD)
+      {
+         double trailDist = atr[0] * TrailDistance_ATR;
+         double point = SymbolInfoDouble(WorkingSymbol, SYMBOL_POINT);
+         int stopLevel = (int)SymbolInfoInteger(WorkingSymbol, SYMBOL_TRADE_STOPS_LEVEL);
+         double minDistance = (stopLevel > 0) ? stopLevel * point : 10 * point;
+         
+         double newSL = 0;
+         bool shouldModify = false;
+         
+         if(ptype == POSITION_TYPE_BUY)
+         {
+            // Trailing para BUY: SL sube siguiendo el precio
+            newSL = NormalizeDouble(currentPrice - trailDist, _Digits);
+            
+            // Verificar que mejore el SL actual
+            if(newSL > currentSL)
+            {
+               double slDistance = currentPrice - newSL;
+               
+               // Verificar distancia mínima
+               if(slDistance >= minDistance)
+               {
+                  shouldModify = true;
+                  LogInfo(StringFormat("[TRAIL] #%d BUY | Profit:$%.2f | CurPrice:%.5f | NewSL:%.5f | Dist:%.5f", 
+                                      ticket, profitUSD, currentPrice, newSL, slDistance));
+               }
+               else
+               {
+                  LogInfo(StringFormat("[TRAIL] ⏭️ #%d Too close | Dist:%.5f < Min:%.5f", ticket, slDistance, minDistance));
+               }
+            }
+            else
+            {
+               LogInfo(StringFormat("[TRAIL] ⏭️ #%d No improve | NewSL:%.5f <= CurSL:%.5f", ticket, newSL, currentSL));
+            }
+         }
+         else // SELL
+         {
+            // Trailing para SELL: SL baja siguiendo el precio
+            newSL = NormalizeDouble(currentPrice + trailDist, _Digits);
+            
+            if(currentSL == 0 || newSL < currentSL)
+            {
+               double slDistance = newSL - currentPrice;
+               
+               if(slDistance >= minDistance)
+               {
+                  shouldModify = true;
+                  LogInfo(StringFormat("[TRAIL] #%d SELL | Profit:$%.2f | CurPrice:%.5f | NewSL:%.5f | Dist:%.5f", 
+                                      ticket, profitUSD, currentPrice, newSL, slDistance));
+               }
+               else
+               {
+                  LogInfo(StringFormat("[TRAIL] ⏭️ #%d Too close | Dist:%.5f < Min:%.5f", ticket, slDistance, minDistance));
+               }
+            }
+            else
+            {
+               LogInfo(StringFormat("[TRAIL] ⏭️ #%d No improve | NewSL:%.5f >= CurSL:%.5f", ticket, newSL, currentSL));
+            }
+         }
+         
+         if(shouldModify)
+         {
+            if(trade.PositionModify(ticket, newSL, currentTP))
+            {
+               LogInfo(StringFormat("📈 TRAIL #%d | Profit:$%.2f | OldSL:%.5f → NewSL:%.5f", 
+                                   ticket, profitUSD, currentSL, newSL));
+               
+               SendTelegramMsg("📈 TRAIL\n#" + IntegerToString(ticket) + 
+                             "\nProfit: $" + DoubleToString(profitUSD, 2) +
+                             "\nOld: " + DoubleToString(currentSL, _Digits) +
+                             "\nNew: " + DoubleToString(newSL, _Digits));
+            }
+            else
+            {
+               LogInfo(StringFormat("[TRAIL] ❌ Failed: %d - %s", GetLastError(), trade.ResultRetcodeDescription()));
+            }
+         }
+      }
+      else if(UseTrailingStop && profitUSD < TrailStart_USD)
+      {
+         LogInfo(StringFormat("[TRAIL] ⏳ #%d Waiting | Profit:$%.2f < Start:$%.2f", ticket, profitUSD, TrailStart_USD));
+      }
+   }
+}
+
+//+------------------------------------------------------------------+
+//| Ejecutar trade CON NOTIFICACIÓN COMPLETA                          |
+//+------------------------------------------------------------------+
+bool ExecuteTrade(int signal, string strategy)
+{
+   if(signal == 0) return false;
+   
+   double atr[];
+   ArraySetAsSeries(atr, true);
+   if(CopyBuffer(atrHandle, 0, 0, 2, atr) <= 0) return false;
+   
+   double atrValue = atr[0];
+   double slDistance = atrValue * SL_ATR_Multiplier;
+   
+   if(slDistance < MinSL_USD) slDistance = MinSL_USD;
+   if(slDistance > MaxSL_USD) slDistance = MaxSL_USD;
+   
+   double tpDistance = slDistance * TP_RiskReward;
+   double lot = CalcLotByRisk(RiskPercent, slDistance);
+   
+   int digits = (int)SymbolInfoInteger(WorkingSymbol, SYMBOL_DIGITS);
+   bool success = false;
+   ulong orderTicket = 0;
+   
+   LogInfo("═══════════════════════════════════════════");
+   LogInfo(StringFormat("🎯 EXECUTING %s via %s", signal > 0 ? "BUY" : "SELL", strategy));
+   
+   if(signal > 0) // BUY
+   {
+      double price = SymbolInfoDouble(WorkingSymbol, SYMBOL_ASK);
+      double sl = NormalizeDouble(price - slDistance, digits);
+      double tp = NormalizeDouble(price + tpDistance, digits);
+      
+      if(sl >= price || tp <= price) return false;
+      
+      success = trade.Buy(lot, WorkingSymbol, price, sl, tp, strategy);
+      
+      if(success)
+      {
+         orderTicket = trade.ResultOrder();
+         dailyTrades++;
+         lastTradeTime = TimeCurrent();
+         
+         // Registrar trade
+         RegisterOpenTrade(orderTicket, price, lot, strategy, POSITION_TYPE_BUY);
+         
+         LogInfo(StringFormat("✅ BUY #%d | Price:%.2f | Lot:%.2f | SL:%.2f | TP:%.2f", 
+                             orderTicket, price, lot, sl, tp));
+         
+         // TELEGRAM DETALLADO AL ABRIR
+         string msg = "🟢 COMPRA ABIERTA\n\n";
+         msg += "🎫 #" + IntegerToString(orderTicket) + "\n";
+         msg += "📊 " + strategy + "\n";
+         msg += "💎 Entry: " + DoubleToString(price, digits) + "\n";
+         msg += "📦 Volume: " + DoubleToString(lot, 2) + " lots\n";
+         msg += "🛡️ SL: " + DoubleToString(sl, digits) + " (-$" + DoubleToString(slDistance, 2) + ")\n";
+         msg += "🎯 TP: " + DoubleToString(tp, digits) + " (+$" + DoubleToString(tpDistance, 2) + ")\n";
+         msg += "⚖️ R:R: 1:" + DoubleToString(TP_RiskReward, 1) + "\n";
+         msg += "📈 Trade #" + IntegerToString(dailyTrades) + " del día\n";
+         msg += "⏰ " + TimeToString(TimeCurrent(), TIME_MINUTES);
+         
+         SendTelegramMsg(msg);
+      }
+      else
+      {
+         LogInfo(StringFormat("❌ BUY FAILED: %d - %s", GetLastError(), trade.ResultRetcodeDescription()));
+      }
+   }
+   else if(signal < 0) // SELL
+   {
+      double price = SymbolInfoDouble(WorkingSymbol, SYMBOL_BID);
+      double sl = NormalizeDouble(price + slDistance, digits);
+      double tp = NormalizeDouble(price - tpDistance, digits);
+      
+      if(sl <= price || tp >= price) return false;
+      
+      success = trade.Sell(lot, WorkingSymbol, price, sl, tp, strategy);
+      
+      if(success)
+      {
+         orderTicket = trade.ResultOrder();
+         dailyTrades++;
+         lastTradeTime = TimeCurrent();
+         
+         // Registrar trade
+         RegisterOpenTrade(orderTicket, price, lot, strategy, POSITION_TYPE_SELL);
+         
+         LogInfo(StringFormat("✅ SELL #%d | Price:%.2f | Lot:%.2f | SL:%.2f | TP:%.2f", 
+                             orderTicket, price, lot, sl, tp));
+         
+         // TELEGRAM DETALLADO AL ABRIR
+         string msg = "🔴 VENTA ABIERTA\n\n";
+         msg += "🎫 #" + IntegerToString(orderTicket) + "\n";
+         msg += "📊 " + strategy + "\n";
+         msg += "💎 Entry: " + DoubleToString(price, digits) + "\n";
+         msg += "📦 Volume: " + DoubleToString(lot, 2) + " lots\n";
+         msg += "🛡️ SL: " + DoubleToString(sl, digits) + " (+$" + DoubleToString(slDistance, 2) + ")\n";
+         msg += "🎯 TP: " + DoubleToString(tp, digits) + " (-$" + DoubleToString(tpDistance, 2) + ")\n";
+         msg += "⚖️ R:R: 1:" + DoubleToString(TP_RiskReward, 1) + "\n";
+         msg += "📈 Trade #" + IntegerToString(dailyTrades) + " del día\n";
+         msg += "⏰ " + TimeToString(TimeCurrent(), TIME_MINUTES);
+         
+         SendTelegramMsg(msg);
+      }
+      else
+      {
+         LogInfo(StringFormat("❌ SELL FAILED: %d - %s", GetLastError(), trade.ResultRetcodeDescription()));
+      }
+   }
+   
+   LogInfo("═══════════════════════════════════════════");
+   
+   return success;
+}
+
+//+------------------------------------------------------------------+
+//| OnInit                                                            |
+//+------------------------------------------------------------------+
+int OnInit()
+{
+   WorkingSymbol = UseChartSymbol ? _Symbol : TargetSymbol;
+   
+   if(!SymbolSelect(WorkingSymbol, true))
+   {
+      Alert("❌ Symbol not available: ", WorkingSymbol);
+      return INIT_FAILED;
+   }
+   
+   LogInfo("═══ INITIALIZING v7.0 AGGRESSIVE ═══");
+   
+   // Inicializar indicadores
+   fastEmaHandle = iMA(WorkingSymbol, OperTF, FastEMA, 0, MODE_EMA, PRICE_CLOSE);
+   slowEmaHandle = iMA(WorkingSymbol, OperTF, SlowEMA, 0, MODE_EMA, PRICE_CLOSE);
+   trendEmaHandle = iMA(WorkingSymbol, OperTF, TrendEMA_Period, 0, MODE_EMA, PRICE_CLOSE);
+   h1TrendHandle = iMA(WorkingSymbol, PERIOD_H1, H1_TrendEMA, 0, MODE_EMA, PRICE_CLOSE);
+   
+   macdHandle = iMACD(WorkingSymbol, OperTF, MACD_Fast, MACD_Slow, MACD_Signal, PRICE_CLOSE);
+   rsiHandle = iRSI(WorkingSymbol, OperTF, RSI_Period, PRICE_CLOSE);
+   atrHandle = iATR(WorkingSymbol, OperTF, ATR_Period);
+   adxHandle = iADX(WorkingSymbol, OperTF, ADX_Period);
+   
+   bbHandle = iBands(WorkingSymbol, OperTF, BB_Period, 0, BB_Deviation, PRICE_CLOSE);
+   stochHandle = iStochastic(WorkingSymbol, OperTF, Stoch_K, Stoch_D, Stoch_Slowing, MODE_SMA, STO_LOWHIGH);
+   
+   if(fastEmaHandle == INVALID_HANDLE || slowEmaHandle == INVALID_HANDLE ||
+      macdHandle == INVALID_HANDLE || rsiHandle == INVALID_HANDLE ||
+      atrHandle == INVALID_HANDLE)
+   {
+      Alert("❌ Failed to create indicators");
+      return INIT_FAILED;
+   }
+   
+   LogInfo("✅ Indicators loaded");
+   
+   trade.SetExpertMagicNumber(MagicNumber);
+   trade.SetDeviationInPoints(Slippage);
+   trade.SetTypeFilling(ORDER_FILLING_FOK);
+   trade.SetAsyncMode(false);
+   
+   lastResetDate = TimeCurrent();
+   ArrayResize(openTrades, 0);
+   
+   LogInfo("═══ INITIALIZATION COMPLETE ═══");
+   SendStartupReport();
+   
+   return INIT_SUCCEEDED;
+}
+
+//+------------------------------------------------------------------+
+//| OnDeinit                                                          |
+//+------------------------------------------------------------------+
+void OnDeinit(const int reason)
+{
+   LogInfo("═══ SHUTTING DOWN ═══");
+   
+   if(fastEmaHandle != INVALID_HANDLE) IndicatorRelease(fastEmaHandle);
+   if(slowEmaHandle != INVALID_HANDLE) IndicatorRelease(slowEmaHandle);
+   if(trendEmaHandle != INVALID_HANDLE) IndicatorRelease(trendEmaHandle);
+   if(h1TrendHandle != INVALID_HANDLE) IndicatorRelease(h1TrendHandle);
+   if(macdHandle != INVALID_HANDLE) IndicatorRelease(macdHandle);
+   if(rsiHandle != INVALID_HANDLE) IndicatorRelease(rsiHandle);
+   if(atrHandle != INVALID_HANDLE) IndicatorRelease(atrHandle);
+   if(adxHandle != INVALID_HANDLE) IndicatorRelease(adxHandle);
+   if(bbHandle != INVALID_HANDLE) IndicatorRelease(bbHandle);
+   if(stochHandle != INVALID_HANDLE) IndicatorRelease(stochHandle);
+   
+   double winRate = (dailyTrades > 0) ? ((double)dailyWins / dailyTrades) * 100.0 : 0;
+   
+   string msg = "🛑 BOT DETENIDO v7.0\n\n";
+   msg += "Trades: " + IntegerToString(dailyTrades) + "\n";
+   msg += "WR: " + DoubleToString(winRate, 1) + "%\n";
+   msg += "P/L: $" + DoubleToString(dailyProfit, 2);
+   SendTelegramMsg(msg);
+   
+   LogInfo(StringFormat("Final: Trades=%d WR=%.1f%% P/L=$%.2f", dailyTrades, winRate, dailyProfit));
+}
+
+//+------------------------------------------------------------------+
+//| OnTick                                                            |
+//+------------------------------------------------------------------+
+void OnTick()
+{
+   CheckDailyReset();
+   CheckClosedTrades();
+   ManagePositions();
+   
+   if(!IsWithinSession()) return;
+   if(!CheckLimits()) return;
+   if(!CheckSpreadFilter()) return;
+   
+   // Nueva barra
+   datetime curBar = iTime(WorkingSymbol, OperTF, 0);
+   if(curBar == lastBarTime) return;
+   
+   LogInfo("═══ NEW BAR " + TimeToString(curBar, TIME_MINUTES) + " ═══");
+   lastBarTime = curBar;
+   
+   if(!CheckVolumeFilter()) return;
+   
+   double adxValue;
+   if(!CheckADXFilter(adxValue)) return;
+   
+   // Cooldown
+   if(TimeCurrent() - lastTradeTime < CooldownSeconds) return;
+   
+   LogInfo("✅ All filters OK - Checking strategies");
+   
+   int signal = 0;
+   string strategyName = "";
+   
+   // ESTRATEGIA 1: EMA + MACD
+   signal = CheckStrategy_EMA_MACD();
+   if(signal != 0)
+   {
+      strategyName = "EMA_MACD";
+      if(ExecuteTrade(signal, strategyName)) return;
+   }
+   
+   // ESTRATEGIA 2: BB + RSI
+   signal = CheckStrategy_BB_RSI();
+   if(signal != 0)
+   {
+      strategyName = "BB_RSI";
+      if(ExecuteTrade(signal, strategyName)) return;
+   }
+   
+   // ESTRATEGIA 3: STOCHASTIC
+   signal = CheckStrategy_Stochastic();
+   if(signal != 0)
+   {
+      strategyName = "STOCH";
+      if(ExecuteTrade(signal, strategyName)) return;
+   }
+}
+//+------------------------------------------------------------------+
